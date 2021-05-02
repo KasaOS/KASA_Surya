@@ -15,6 +15,7 @@
 #include <net/sock.h>
 #include "bpf_service.h"
 #include <linux/bpf.h>
+#include "qrtr.h"
 
 /* for service lookup for eBPF */
 static RADIX_TREE(service_lookup, GFP_KERNEL);
@@ -137,7 +138,8 @@ int qrtr_bpf_filter_attach(int ufd)
 	if (bpf_filter)
 		return -EEXIST;
 
-	if (!uid_eq(current_euid(), GLOBAL_ROOT_UID))
+	if (!(in_egroup_p(AID_VENDOR_QRTR) ||
+	      in_egroup_p(GLOBAL_ROOT_GID)))
 		return -EPERM;
 
 	prog = bpf_prog_get_type(ufd, BPF_PROG_TYPE_SOCKET_FILTER);
