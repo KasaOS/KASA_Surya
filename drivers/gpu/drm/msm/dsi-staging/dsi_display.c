@@ -19,7 +19,6 @@
 #include <linux/of_gpio.h>
 #include <linux/err.h>
 #include <drm/drm_notifier.h>
-#include <linux/battery_saver.h>
 #include <linux/sched.h>
 
 #include "msm_drv.h"
