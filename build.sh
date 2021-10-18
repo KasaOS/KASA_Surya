@@ -1,74 +1,41 @@
-#!/bin/bash
+#!/usr/bin/env bash
+IMAGE=$(pwd)/out/arch/arm64/boot/Image-gz.dtb
+START=$(date +"%s")
+KERNEL_DIR=$(pwd)
+PATH="${KERNEL_DIR}/clang/bin:${KERNEL_DIR}/gcc/bin:${KERNEL_DIR}/gcc32/bin:${PATH}"
+VERSION="$(cat arch/arm64/configs/vendor/surya_defconfig | grep "CONFIG_LOCALVERSION\=" | sed -r 's/.*"(.+)".*/\1/' | sed 's/^.//')"
+export KBUILD_COMPILER_STRING="$(${KERNEL_DIR}/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
+export KBUILD_BUILD_HOST="IU"
+export KBUILD_BUILD_USER="dlwlrma123"
 
-#set -e
+#clear screen
+clear
 
-## Copy this script inside the kernel directory
-KERNEL_DEFCONFIG=vendor/surya_defconfig
-ANYKERNEL3_DIR=$PWD/AnyKernel3/
-FINAL_KERNEL_ZIP=Optimus_Drunk_Surya_v11.32.zip
-export PATH="$KERNELDIR/prebuilts/proton-clang/bin:${PATH}"
-export ARCH=arm64
-export SUBARCH=arm64
-export KBUILD_COMPILER_STRING="$($KERNELDIR/prebuilts/proton-clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
-# Speed up build process
-MAKE="./makeparallel"
+#always do clean compilation
+rm -rf out
 
-BUILD_START=$(date +"%s")
-blue='\033[0;34m'
-cyan='\033[0;36m'
-yellow='\033[0;33m'
-red='\033[0;31m'
-nocol='\033[0m'
+function compile() {
+    make O=out ARCH=arm64 vendor/surya_defconfig
+    make -j$(nproc --all) O=out \
+                    ARCH=arm64 \
+                    CC=clang \
+                    CLANG_TRIPLE=aarch64-linux-gnu- \
+                    CROSS_COMPILE=aarch64-linux-android- \
+                    CROSS_COMPILE_ARM32=arm-linux-androideabi-
+}
 
-# Clean build always lol
-echo "**** Cleaning ****"
-mkdir -p out
-make O=out clean
+compile
 
-echo "**** Kernel defconfig is set to $KERNEL_DEFCONFIG ****"
-echo -e "$blue***********************************************"
-echo "          BUILDING KERNEL          "
-echo -e "***********************************************$nocol"
-make $KERNEL_DEFCONFIG O=out
-make -j$(nproc --all) O=out \
-                      ARCH=arm64 \
-                      CC=clang \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-                      NM=llvm-nm \
-                      OBJCOPY=llvm-objcopy \
-                      OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip
+# Build flashable zip
+cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+cp out/arch/arm64/boot/dtbo AnyKernel3/
+zipfile="./$VERSION-surya-NON-Unified-$(date +%Y%m%d-%H%M).zip"
+7z a -mm=Deflate -mfb=258 -mpass=15 -r $zipfile ./AnyKernel3/*
 
-echo "**** Verify Image.gz-dtb & dtbo.img ****"
-ls $PWD/out/arch/arm64/boot/Image.gz-dtb
-ls $PWD/out/arch/arm64/boot/dtbo.img
+#clean leftovers
+rm -rf AnyKernel3/Image.gz-dtb
 
-# Anykernel 3 time!!
-echo "**** Verifying AnyKernel3 Directory ****"
-ls $ANYKERNEL3_DIR
-echo "**** Removing leftovers ****"
-rm -rf $ANYKERNEL3_DIR/Image.gz-dtb
-rm -rf $ANYKERNEL3_DIR/dtbo.img
-rm -rf $ANYKERNEL3_DIR/$FINAL_KERNEL_ZIP
+END=$(date +"%s")
+DIFF=$(($END - $START))
 
-echo "**** Copying Image.gz-dtb & dtbo.img ****"
-cp $PWD/out/arch/arm64/boot/Image.gz-dtb $ANYKERNEL3_DIR/
-cp $PWD/out/arch/arm64/boot/dtbo.img $ANYKERNEL3_DIR/
-
-echo "**** Time to zip up! ****"
-cd $ANYKERNEL3_DIR/
-zip -r9 $FINAL_KERNEL_ZIP * -x README $FINAL_KERNEL_ZIP
-cp $ANYKERNEL3_DIR/$FINAL_KERNEL_ZIP $KERNELDIR/$FINAL_KERNEL_ZIP
-
-echo "**** Done, here is your sha1 ****"
-cd ..
-rm -rf $ANYKERNEL3_DIR/$FINAL_KERNEL_ZIP
-rm -rf $ANYKERNEL3_DIR/Image.gz-dtb
-rm -rf $ANYKERNEL3_DIR/dtbo.img
-rm -rf out/
-
-BUILD_END=$(date +"%s")
-DIFF=$(($BUILD_END - $BUILD_START))
-echo -e "$yellow Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.$nocol"
-sha1sum $KERNELDIR/$FINAL_KERNEL_ZIP
+echo "Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
