@@ -41,7 +41,7 @@
 #include <trace/events/pagemap.h>
 
 /* How many pages do we try to swap or page in/out together? */
-int page_cluster;
+int page_cluster = 8;
 
 static DEFINE_PER_CPU(struct pagevec, lru_add_pvec);
 static DEFINE_PER_CPU(struct pagevec, lru_rotate_pvecs);
@@ -1016,7 +1016,7 @@ void __init swap_setup(void)
 	if (megs < 16)
 		page_cluster = 2;
 	else
-		page_cluster = 3;
+		page_cluster = 8;
 	/*
 	 * Right now other parts of the system means that we
 	 * _really_ don't want to cluster much more
